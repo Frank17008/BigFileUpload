@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>big-file-upload</title>
+  </head>
+  <body>
+    <input type="file" id="chooseFile" />
+    <button id="uploadBtn">大文件上传</button>
+  </body>
+  <script type="text/javascript">
+    let fileObj = null
+
+    const chooseFile = document.getElementById('chooseFile')
+    const uploadBtn = document.getElementById('uploadBtn')
+
+    chooseFile.addEventListener('change', (e) => {
+      const file = e.target.files[0]
+      fileObj = file
+    })
+
+    uploadBtn.addEventListener('click', () => {
+      if (!fileObj) return
+      const fileChunks = createChunks(fileObj)
+      const chunkList = fileChunks.map(({ file }, index) => {
+        return {
+          index,
+          file,
+          size: file.size,
+          type: fileObj.type,
+          fileName: fileObj.name, // 源文件名
+        }
+      })
+      uploadChunks(chunkList)
+    })
+
+    // 创建切片 5M
+    function createChunks(file, size = 5 * 1024 * 1024) {
+      const chunks = []
+      let sliceIndex = 0
+      while (sliceIndex < file.size) {
+        const chunk = file.slice(sliceIndex, sliceIndex + size)
+        chunks.push({ file: chunk })
+        sliceIndex += size
+      }
+      return chunks
+    }
+
+    async function uploadChunks(chunkList) {
+      const requests = chunkList.map((chunk) => {
+        const formData = new FormData()
+        formData.append('chunkName', chunk.index)
+        formData.append('type', chunk.type)
+        formData.append('size', chunk.size)
+        formData.append('index', chunk.index)
+        formData.append('fileName', chunk.fileName)
+        formData.append('totalChunks', chunkList.length)
+        formData.append('file', chunk.file)
+        return fetch(new URL('http://localhost:8000/upload'), {
+          method: 'post',
+          // 自定义headers时,新版本multer解析formData会报错,需要Boundery
+          // headers: { 'Content-Type': 'multipart/form-data' },
+          body: formData,
+        })
+      })
+      await Promise.all(requests)
+      mergeChunks()
+    }
+
+    async function mergeChunks() {
+      const res = await fetch(new URL(`http://localhost:8000/mergeChunks?fileName=${fileObj.name}`), {
+        method: 'get',
+      })
+    }
+  </script>
+</html>
