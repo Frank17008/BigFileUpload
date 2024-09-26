@@ -11,6 +11,10 @@
   </body>
   <script type="text/javascript">
     let fileObj = null
+    // 默认切片大小
+    const chunkSize = 5 * 1024 * 1024
+    // 默认最大并发请求数量
+    const concurrentReqs = 4
 
     const chooseFile = document.getElementById('chooseFile')
     const uploadBtn = document.getElementById('uploadBtn')
@@ -20,9 +24,10 @@
       fileObj = file
     })
 
-    uploadBtn.addEventListener('click', () => {
+    uploadBtn.addEventListener('click', async () => {
       if (!fileObj) return
       const fileChunks = createChunks(fileObj)
+      // 切片添加编号及其他属性
       const chunkList = fileChunks.map(({ file }, index) => {
         return {
           index,
@@ -32,11 +37,12 @@
           fileName: fileObj.name, // 源文件名
         }
       })
-      uploadChunks(chunkList)
+      await asyncPool(concurrentReqs, chunkList, uploadChunk)
+      mergeChunks()
     })
 
-    // 创建切片 5M
-    function createChunks(file, size = 5 * 1024 * 1024) {
+    // 创建切片
+    function createChunks(file, size = chunkSize) {
       const chunks = []
       let sliceIndex = 0
       while (sliceIndex < file.size) {
@@ -47,25 +53,41 @@
       return chunks
     }
 
-    async function uploadChunks(chunkList) {
-      const requests = chunkList.map((chunk) => {
-        const formData = new FormData()
-        formData.append('chunkName', chunk.index)
-        formData.append('type', chunk.type)
-        formData.append('size', chunk.size)
-        formData.append('index', chunk.index)
-        formData.append('fileName', chunk.fileName)
-        formData.append('totalChunks', chunkList.length)
-        formData.append('file', chunk.file)
-        return fetch(new URL('http://localhost:8000/upload'), {
-          method: 'post',
-          // 自定义headers时,新版本multer解析formData会报错,需要Boundery
-          // headers: { 'Content-Type': 'multipart/form-data' },
-          body: formData,
-        })
+    function uploadChunk(chunkItem, chunkList) {
+      const formData = new FormData()
+      formData.append('chunkName', chunkItem.index)
+      formData.append('type', chunkItem.type)
+      formData.append('size', chunkItem.size)
+      formData.append('index', chunkItem.index)
+      formData.append('fileName', chunkItem.fileName)
+      formData.append('totalChunks', chunkList.length)
+      formData.append('file', chunkItem.file)
+      return fetch(new URL('http://localhost:8000/upload'), {
+        method: 'post',
+        // 自定义headers时,高版本multer解析formData会报错,需要Boundery
+        // headers: { 'Content-Type': 'multipart/form-data' },
+        body: formData,
       })
-      await Promise.all(requests)
-      mergeChunks()
+    }
+
+    async function asyncPool(limit, taskArr, interatorFn) {
+      const ret = [] // 存储所有promise
+      const executing = new Set() // 存储当前正在执行的promise
+      for (const item of taskArr) {
+        const p = Promise.resolve()
+          .then(() => interatorFn(item, taskArr))
+          .finally(() => {
+            executing.delete(p)
+          })
+        // 加入队列
+        ret.push(p)
+        executing.add(p)
+        // 队列长度大于limit,等待执行队列中的任意一个promise执行完毕
+        if (executing.size >= limit) {
+          await Promise.race(executing)
+        }
+      }
+      return Promise.all(ret)
     }
 
     async function mergeChunks() {
