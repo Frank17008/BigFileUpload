@@ -23,6 +23,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage })
 
+// 文件上传
 app.post('/upload', upload.single('file'), (req, res) => {
   const { fileName, chunkName, index, totalChunks } = req.body
   if (!fileName || !chunkName) {
@@ -41,6 +42,7 @@ app.post('/upload', upload.single('file'), (req, res) => {
   })
 })
 
+// 合并切片
 app.get('/mergeChunks', (req, res) => {
   const { fileName } = req.query
   // 最终合成的文件路径
@@ -61,6 +63,25 @@ app.get('/mergeChunks', (req, res) => {
     msg: '合并成功',
     success: true,
   })
+})
+
+// 秒传校验
+app.get('/verify', (req, res) => {
+  const { fileName } = req.query
+  const filePath = path.resolve('uploads', fileName)
+  if (fs.existsSync(filePath)) {
+    res.send({
+      code: '200',
+      msg: '文件已存在',
+      success: true,
+    })
+  } else {
+    res.send({
+      code: '400',
+      msg: '文件不存在',
+      success: false,
+    })
+  }
 })
 
 app.listen(8000, () => {
