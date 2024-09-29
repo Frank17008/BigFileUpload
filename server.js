@@ -25,15 +25,16 @@ const upload = multer({ storage })
 
 // 文件上传
 app.post('/upload', upload.single('file'), (req, res) => {
-  const { fileName, chunkName, index, totalChunks } = req.body
-  if (!fileName || !chunkName) {
+  const { fileName, fileHash, index, totalChunks } = req.body
+  if (!fileName) {
     return res.status(400).send('文件名缺失')
   }
-  const tempPath = path.resolve('uploads', `${fileName}-${index}`)
+  const tempPath = path.resolve('uploads', `${fileHash}-${index}`)
+
   if (!fs.existsSync(tempPath)) {
     fs.moveSync(req.file.path, tempPath)
   } else {
-    fs.removeSync(req.file.path)
+    // fs.removeSync(req.file.path)
   }
   res.send({
     code: '200',
