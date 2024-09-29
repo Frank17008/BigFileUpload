@@ -68,8 +68,8 @@ app.get('/mergeChunks', (req, res) => {
 
 // 秒传校验
 app.get('/verify', (req, res) => {
-  const { fileName } = req.query
-  const filePath = path.resolve('uploads', fileName)
+  const { fileHash } = req.query
+  const filePath = path.resolve('uploads', fileHash)
   if (fs.existsSync(filePath)) {
     res.send({
       code: '200',
