@@ -6,7 +6,7 @@
     <title>big-file-upload</title>
   </head>
   <body>
-    <input type="file" id="chooseFile" />
+    <input type="file" id="chooseFile" multiple />
     <button id="uploadBtn">大文件上传</button>
   </body>
 
@@ -16,8 +16,6 @@
     let fileObj = null
     // 文件hash
     let fileHash = null
-    // 切片集合
-    let fileChunks = []
     // 默认切片大小
     const chunkSize = 5 * 1024 * 1024
     // 默认最大并发请求数量
@@ -27,34 +25,43 @@
     const uploadBtn = document.getElementById('uploadBtn')
 
     chooseFile.addEventListener('change', (e) => {
-      const file = e.target.files[0]
-      fileObj = file
-      fileChunks = createChunks(fileObj)
+      files = e.target.files
+      // files.forEach(file => {
+
+      // })
+      // fileObj = file
+      // fileChunks = createChunks(fileObj)
     })
 
     uploadBtn.addEventListener('click', async () => {
-      if (!fileObj) return
+      if (!files.length) return
 
-      // 获取文件hash
-      const fileHash = await calcFileHash(fileChunks)
+      await Promise.all(
+        Array.from(files).map(async (file) => {
+          const fileChunks = createChunks(file)
 
-      // 校验文件是否已上传
-      const res = await isFileExist({ fileHash })
-      if (res.code == 200) return console.log('文件已上传,直接提示上传成功')
+          // 获取文件hash
+          const fileHash = await getFileHash(fileChunks)
 
-      // 切片添加编号及其他属性
-      const chunkList = fileChunks.map(({ file }, index) => {
-        return {
-          index,
-          file,
-          fileHash,
-          size: file.size,
-          type: fileObj.type,
-          fileName: fileObj.name, // 源文件名
-        }
-      })
-      await asyncPool(concurrentReqs, chunkList, uploadChunk)
-      mergeChunks()
+          // 校验文件是否已上传
+          const res = await isFileExist({ fileHash })
+          if (res.code == 200) return console.log('文件已上传,直接提示上传成功')
+
+          // 切片添加编号及其他属性
+          const chunkList = fileChunks.map(({ file: chunk }, index) => {
+            return {
+              index,
+              fileHash,
+              file: chunk,
+              size: chunk.size,
+              type: file.type,
+              fileName: file.name, // 源文件名
+            }
+          })
+          await asyncPool(concurrentReqs, chunkList, uploadChunk)
+          mergeChunks({ fileHash, fileName: file.name })
+        })
+      )
     })
 
     // 创建切片
@@ -71,12 +78,13 @@
 
     async function uploadChunk(chunkItem, chunkList) {
       const formData = new FormData()
-      formData.append('type', chunkItem.type)
       formData.append('size', chunkItem.size)
       formData.append('index', chunkItem.index)
       formData.append('fileName', chunkItem.fileName)
       formData.append('totalChunks', chunkList.length)
       formData.append('file', chunkItem.file)
+      formData.append('fileHash', chunkItem.fileHash)
+
       return fetch(new URL(`${SERVER_URL}/upload`), {
         method: 'post',
         // 自定义headers时,高版本multer解析formData会报错,需要Boundery
@@ -104,8 +112,8 @@
       return Promise.all(ret)
     }
     // 合并请求
-    async function mergeChunks() {
-      const res = await fetch(new URL(`${SERVER_URL}/mergeChunks?fileName=${fileObj.name}`), {
+    async function mergeChunks({ fileHash, fileName }) {
+      const res = await fetch(new URL(`${SERVER_URL}/mergeChunks?fileHash=${fileHash}&fileName=${fileName}`), {
         method: 'get',
       })
       return res.json()
@@ -119,7 +127,7 @@
     }
 
     // 计算文件hash
-    async function calcFileHash(chunkList) {
+    async function getFileHash(chunkList) {
       return new Promise((resolve, reject) => {
         const worker = new Worker(`${location.href}js/hash-worker.js`)
         worker.postMessage({ chunkList })

@@ -29,7 +29,8 @@ app.post('/upload', upload.single('file'), (req, res) => {
   if (!fileName) {
     return res.status(400).send('文件名缺失')
   }
-  const tempPath = path.resolve('uploads', `${fileHash}-${index}`)
+  // 临时存储目录
+  const tempPath = path.resolve('temp', `${fileHash}-${index}`)
 
   if (!fs.existsSync(tempPath)) {
     fs.moveSync(req.file.path, tempPath)
@@ -45,11 +46,15 @@ app.post('/upload', upload.single('file'), (req, res) => {
 
 // 合并切片
 app.get('/mergeChunks', (req, res) => {
-  const { fileName } = req.query
+  const { fileHash, fileName } = req.query
+
   // 最终合成的文件路径
   const filePath = path.resolve('uploads', fileName)
-  const tempPath = path.resolve('uploads')
+
+  const tempPath = path.resolve('temp')
+
   const chunkPaths = fs.readdirSync(tempPath)
+
   // 先排序,再进行拼接,否则会导致切片文件顺序错乱
   chunkPaths.sort((a, b) => parseInt(a.split('-')[1]) - parseInt(b.split('-')[1]))
   chunkPaths.forEach((chunkName) => {
@@ -59,6 +64,7 @@ app.get('/mergeChunks', (req, res) => {
     // 删除切片
     fs.removeSync(chunkFullPath)
   })
+
   res.send({
     code: '200',
     msg: '合并成功',
@@ -69,6 +75,7 @@ app.get('/mergeChunks', (req, res) => {
 // 秒传校验
 app.get('/verify', (req, res) => {
   const { fileHash } = req.query
+  // 伪代码实现,真实要查数据库中存储的hash
   const filePath = path.resolve('uploads', fileHash)
   if (fs.existsSync(filePath)) {
     res.send({
