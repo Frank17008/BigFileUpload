@@ -36,6 +36,7 @@ app.post('/upload', upload.single('file'), (req, res) => {
     fs.moveSync(req.file.path, tempPath)
   } else {
     // fs.removeSync(req.file.path)
+    res.send({ code: '200', data: index, msg: '切片已存在' })
   }
   res.send({
     code: '200',
