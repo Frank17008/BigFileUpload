@@ -7,7 +7,7 @@
   </head>
   <body>
     <input type="file" id="chooseFile" multiple />
-    <button id="uploadBtn">大文件上传</button>
+    <button id="uploadBtn">开始上传</button>
   </body>
 
   <script type="text/javascript">
@@ -26,11 +26,6 @@
 
     chooseFile.addEventListener('change', (e) => {
       files = e.target.files
-      // files.forEach(file => {
-
-      // })
-      // fileObj = file
-      // fileChunks = createChunks(fileObj)
     })
 
     uploadBtn.addEventListener('click', async () => {
