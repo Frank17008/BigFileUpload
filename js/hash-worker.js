@@ -5,14 +5,13 @@
   self.onmessage = (e) => {
     const { chunkList } = e.data
     const spark = new self.SparkMD5.ArrayBuffer()
-    // console.time('first')
     const loadNextChunk = (i) => {
       const fileReader = new FileReader()
       fileReader.readAsArrayBuffer(chunkList[i].file)
       fileReader.onload = (e) => {
         spark.append(e.target.result)
         // if (i < chunkList.length - 1) {
-        if (i === 0 || i === chunkList.length - 1 || i % 2 === 0) {
+        if ((i === 0 || i === chunkList.length - 1 || i % 2 === 0) && i < chunkList.length - 1) {
           loadNextChunk(i + 1)
         } else {
           self.postMessage({
