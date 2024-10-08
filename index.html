@@ -24,6 +24,8 @@
 
     let promisePool = []
 
+    let chunkList = []
+
     const chooseFile = document.getElementById('chooseFile')
     const startBtn = document.getElementById('start')
     const pauseBtn = document.getElementById('pause')
@@ -47,7 +49,7 @@
           if (res.code == 200) return console.log('文件已上传,直接提示上传成功')
 
           // 切片添加编号及其他属性
-          const chunkList = fileChunks.map(({ file: chunk }, index) => {
+          chunkList = fileChunks.map(({ file: chunk }, index) => {
             return {
               index,
               fileHash,
@@ -64,13 +66,16 @@
     })
 
     pauseBtn.addEventListener('click', async (e) => {
-      e.target.innerText = e.target.innerText === '暂停上传' ? '继续上传' : '暂停上传'
       if (!promisePool.length) return
       if (e.target.innerText === '暂停上传') {
-        promisePool.forEach((item) => item?.abort())
+        promisePool.forEach((item) => item?.__controller?.abort())
       } else if (e.target.innerText === '继续上传') {
         await asyncPool(concurrentReqs, chunkList, uploadChunk)
+        // 当前缓存中正在上传的切片中获取源文件名称及hash
+        const { fileHash, fileName } = chunkList[0]
+        mergeChunks({ fileHash, fileName })
       }
+      e.target.innerText = e.target.innerText === '暂停上传' ? '继续上传' : '暂停上传'
     })
 
     // 创建切片
@@ -94,12 +99,17 @@
       formData.append('file', chunkItem.file)
       formData.append('fileHash', chunkItem.fileHash)
 
+      const controller = new AbortController()
+      const { signal } = controller
+
       const xhr = fetch(new URL(`${SERVER_URL}/upload`), {
         method: 'post',
         // 自定义headers时,高版本multer解析formData会报错,需要Boundery
         // headers: { 'Content-Type': 'multipart/form-data' },
         body: formData,
+        signal,
       })
+      xhr.__controller = controller
       promisePool.push(xhr)
       return xhr
     }
